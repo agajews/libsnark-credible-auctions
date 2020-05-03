@@ -50,7 +50,7 @@ int main()
   // x*x = sym_1
   pb.add_r1cs_constraint(r1cs_constraint<FieldT>(x, x, sym_1));
 
-  // sym_1 * x = y
+  // sym_1 * sym_1 = y
   pb.add_r1cs_constraint(r1cs_constraint<FieldT>(sym_1, sym_1, y));
 
   // y + x = sym_2
@@ -62,10 +62,10 @@ int main()
   // Add witness values
 
   pb.val(x) = 3;
-  pb.val(out) = 35;
   pb.val(sym_1) = 9;
-  pb.val(y) = 27;
-  pb.val(sym_2) = 30;
+  pb.val(y) = 81;
+  pb.val(sym_2) = 84;
+  pb.val(out) = 89;
 
   const r1cs_constraint_system<FieldT> constraint_system = pb.get_constraint_system();
 
