@@ -51,7 +51,7 @@ int main()
   pb.add_r1cs_constraint(r1cs_constraint<FieldT>(x, x, sym_1));
 
   // sym_1 * x = y
-  pb.add_r1cs_constraint(r1cs_constraint<FieldT>(sym_1, x, y));
+  pb.add_r1cs_constraint(r1cs_constraint<FieldT>(sym_1, sym_1, y));
 
   // y + x = sym_2
   pb.add_r1cs_constraint(r1cs_constraint<FieldT>(y + x, 1, sym_2));
