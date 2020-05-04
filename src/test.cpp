@@ -278,6 +278,8 @@ struct BitArray {
         }
     }
 
+    BitArray(ZKSystem &_system, std::vector<FieldElem *> _bits) : system(_system), size(_bits.size()), bits(_bits) {}
+
     FieldElem & operator[](int i) {
         return *bits[i];
     }
@@ -294,11 +296,27 @@ struct BitArray {
         }
     }
 
+    void make_public() {
+        for (auto bit : bits) {
+            bit->make_public();
+        }
+    }
+
+    std::vector<int> eval() {
+        std::vector<int> vals;
+        for (auto bit : bits) {
+            vals.push_back(bit->eval());
+        }
+        return vals;
+    }
+
     friend FieldElem & operator>(BitArray &arr1, BitArray &arr2);
     friend FieldElem & operator<(BitArray &arr1, BitArray &arr2);
     friend FieldElem & operator>=(BitArray &arr1, BitArray &arr2);
     friend FieldElem & operator<=(BitArray &arr1, BitArray &arr2);
     friend FieldElem & operator==(BitArray &arr1, BitArray &arr2);
+
+    friend BitArray operator^(BitArray &arr1, BitArray &arr2);
 };
 
 FieldElem & operator>(BitArray &a, BitArray &b) {
@@ -337,6 +355,14 @@ FieldElem & operator<=(BitArray &a, BitArray &b) {
     return out;
 }
 
+BitArray operator^(BitArray &a, BitArray &b) {
+    std::vector<FieldElem *> elems;
+    for (int i=0; i<a.size; i++) {
+        elems.push_back(&(a[i] * (1 - b[i]) + (1 - a[i]) * b[i]));
+    }
+    return BitArray(a.system, elems);
+}
+
 int main()
 {
   // Create zksystem
@@ -344,16 +370,25 @@ int main()
 
   BitArray a(system, "a", 8);
   BitArray b(system, "b", 8);
+  BitArray key(system, "key", 8);
 
-  auto &out = a == b;
+  auto &out = a > b;
+  auto ahash = a ^ key;
+  auto bhash = b ^ key;
 
   out.make_public();
+  ahash.make_public();
+  bhash.make_public();
+  key.make_public();
   system.allocate();
 
   a.set(6);
   b.set(5);
+  key.set(1337);
 
-  int output =  out.eval();
+  int output = out.eval();
+  auto ahash_output = ahash.eval();
+  auto bhash_output = bhash.eval();
 
   auto keypair = system.make_keypair();
   auto proof = system.make_proof(keypair);
@@ -363,6 +398,18 @@ int main()
   cout << "Auxiliary (private) input: " << system.pb.auxiliary_input() << endl;
   cout << "Verification status: " << verified << endl;
   cout << "Output: " << output << endl;
+
+  cout << "ahash: ";
+  for (auto val : ahash_output) {
+      cout << val << ' ';
+  }
+  cout << endl;
+
+  cout << "bhash: ";
+  for (auto val : bhash_output) {
+      cout << val << ' ';
+  }
+  cout << endl;
 
   return 0;
 }
