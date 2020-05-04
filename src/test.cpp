@@ -310,6 +310,15 @@ struct BitArray {
         return vals;
     }
 
+    FieldElem & to_field_elem() {
+        FieldElem *elem = &((1 << (size - 1)) * (*bits[0]));
+        for (int i=1; i<size; i++) {
+            elem = &(*elem + (1 << (size - i - 1)) * (*bits[i]));
+        }
+        FieldElem &elem_ref = *elem;
+        return elem_ref;
+    }
+
     friend FieldElem & operator>(BitArray &arr1, BitArray &arr2);
     friend FieldElem & operator<(BitArray &arr1, BitArray &arr2);
     friend FieldElem & operator>=(BitArray &arr1, BitArray &arr2);
@@ -372,10 +381,6 @@ int main()
   BitArray b(system, "b", 8);
   BitArray c(system, "c", 8);
 
-  auto &a_val = system.def("a_val");
-  auto &b_val = system.def("b_val");
-  auto &c_val = system.def("c_val");
-
   BitArray key(system, "key", 8);
 
   auto &agtb = a > b;
@@ -391,7 +396,7 @@ int main()
   auto &c_second = (1 - a_second) * (1 - b_second);
 
   auto &winner = 1 * a_winner + 2 * b_winner + 3 * c_winner;
-  auto &price = a_val * a_second + b_val * b_second + c_val * c_second;
+  auto &price = a.to_field_elem() * a_second + b.to_field_elem() * b_second + c.to_field_elem() * c_second;
 
   auto ahash = a ^ key;
   auto bhash = b ^ key;
@@ -408,14 +413,8 @@ int main()
 
   // set inputs
   a.set(5);
-  a_val.set(5);
-
-  b.set(18);
-  b_val.set(18);
-
-  c.set(10);
-  c_val.set(10);
-
+  b.set(12);
+  c.set(14);
   key.set(1337);
 
   // compute intermediate variables and outputs
