@@ -24,7 +24,8 @@ struct FieldElem {
     ZKSystem &system;
     pb_variable<FieldT> pb_var;
     std::string name;
-    bool pub = false;
+    bool pub, is_set;
+    int val;
 
     FieldElem(std::string _name, ZKSystem &_system);
 
@@ -34,53 +35,60 @@ struct FieldElem {
     }
     void make_public() {
         pub = true;
+        cout << name << " public: " << pub << endl;
     }
 
-    virtual int eval() const {
+    virtual int eval() {
         cout << "field eval" << endl;
     };
 
-    friend SumFieldElem & operator+(const FieldElem &elem1, const FieldElem &elem2);
-    friend DiffFieldElem & operator-(const FieldElem &elem1, const FieldElem &elem2);
-    friend ProdFieldElem & operator*(const FieldElem &elem1, const FieldElem &elem2);
+    friend SumFieldElem & operator+(FieldElem &elem1, FieldElem &elem2);
+    friend DiffFieldElem & operator-(FieldElem &elem1, FieldElem &elem2);
+    friend ProdFieldElem & operator*(FieldElem &elem1, FieldElem &elem2);
 
-    friend DiffFieldElem & operator-(const int x, const FieldElem &elem);
+    friend SumFieldElem & operator+(int x, FieldElem &elem);
+    friend DiffFieldElem & operator-(int x, FieldElem &elem);
+    friend ProdFieldElem & operator*(int x, FieldElem &elem);
+
+    friend SumFieldElem & operator+(FieldElem &elem, int x);
+    friend DiffFieldElem & operator-(FieldElem &elem, int x);
+    friend ProdFieldElem & operator*(FieldElem &elem, int x);
 };
 
 struct LeafFieldElem : public FieldElem {
     LeafFieldElem(std::string _name, ZKSystem &_system);
 
-    int val = 0;
-
     virtual void set(int x) {
+        cout << "setting " << name << " to " << x << endl;
+        is_set = true;
         val = x;
     }
 
-    virtual int eval() const;
+    virtual int eval();
 };
 
 struct SumFieldElem : public FieldElem {
-    const FieldElem &child_a, &child_b;
+    FieldElem &child_a, &child_b;
 
-    SumFieldElem(const FieldElem &elem1, const FieldElem &elem2, ZKSystem &_system);
+    SumFieldElem(FieldElem &elem1, FieldElem &elem2, ZKSystem &_system);
 
-    virtual int eval() const;
+    virtual int eval();
 };
 
 struct DiffFieldElem : public FieldElem {
-    const FieldElem &child_a, &child_b;
+    FieldElem &child_a, &child_b;
 
-    DiffFieldElem(const FieldElem &elem1, const FieldElem &elem2, ZKSystem &_system);
+    DiffFieldElem(FieldElem &elem1, FieldElem &elem2, ZKSystem &_system);
 
-    virtual int eval() const;
+    virtual int eval();
 };
 
 struct ProdFieldElem : public FieldElem {
-    const FieldElem &child_a, &child_b;
+    FieldElem &child_a, &child_b;
 
-    ProdFieldElem(const FieldElem &elem1, const FieldElem &elem2, ZKSystem &_system);
+    ProdFieldElem(FieldElem &elem1, FieldElem &elem2, ZKSystem &_system);
 
-    virtual int eval() const;
+    virtual int eval();
 };
 
 struct ZKSystem {
@@ -116,22 +124,21 @@ struct ZKSystem {
 
     void allocate() {
         int n_pub = 0;
-        cout << "iterating" << endl;
         for (FieldElem *elem : elems) {
             if (elem->pub) {
+                cout << "allocating public elem " << elem->name << endl;
                 n_pub += 1;
                 elem->pb_var.allocate(pb, elem->name);
             }
         }
-        cout << "iterating again" << endl;
 
         for (FieldElem *elem : elems) {
             if (!elem->pub) {
+                cout << "allocating private elem " << elem->name << endl;
                 elem->pb_var.allocate(pb, elem->name);
             }
         }
 
-        cout << "setting input sizes" << endl;
         pb.set_input_sizes(n_pub);
     }
 
@@ -143,88 +150,136 @@ struct ZKSystem {
 
 };
 
-FieldElem::FieldElem(std::string _name, ZKSystem &_system) : name(_name), system(_system) {
+FieldElem::FieldElem(std::string _name, ZKSystem &_system) : name(_name), system(_system), pub(false), is_set(false), val(0) {
     /* std::cout << "creating elem " << name << std::endl; */
 };
 
-SumFieldElem & operator+(const FieldElem &elem1, const FieldElem &elem2) {
+SumFieldElem & operator+(FieldElem &elem1, FieldElem &elem2) {
     auto elem = new SumFieldElem(elem1, elem2, elem1.system);
     elem1.system.register_elem(elem);
     return *elem;
 }
 
-DiffFieldElem & operator-(const FieldElem &elem1, const FieldElem &elem2) {
+DiffFieldElem & operator-(FieldElem &elem1, FieldElem &elem2) {
     auto elem = new DiffFieldElem(elem1, elem2, elem1.system);
     elem1.system.register_elem(elem);
     return *elem;
 }
 
-ProdFieldElem & operator*(const FieldElem &elem1, const FieldElem &elem2) {
+ProdFieldElem & operator*(FieldElem &elem1, FieldElem &elem2) {
     auto elem = new ProdFieldElem(elem1, elem2, elem1.system);
     elem1.system.register_elem(elem);
     return *elem;
 }
 
-DiffFieldElem & operator-(const int x, const FieldElem &elem) {
+SumFieldElem & operator+(int x, FieldElem &elem) {
     std::string name = std::to_string(x);
-    auto constant = elem.system.def(name);
-    return constant - elem;
+    auto &constant = elem.system.def(name);
+    constant.set(x);
+    auto &ret = constant + elem;
+    return ret;
+}
+
+DiffFieldElem & operator-(int x, FieldElem &elem) {
+    std::string name = std::to_string(x);
+    auto &constant = elem.system.def(name);
+    constant.set(x);
+    auto &ret = constant - elem;  // why is this needed to prevent a copy
+    return ret;
+}
+
+ProdFieldElem & operator*(int x, FieldElem &elem) {
+    std::string name = std::to_string(x);
+    auto &constant = elem.system.def(name);
+    constant.set(x);
+    auto &ret = constant * elem;
+    return ret;
+}
+
+SumFieldElem & operator+(FieldElem &elem, int x) {
+    std::string name = std::to_string(x);
+    auto &constant = elem.system.def(name);
+    constant.set(x);
+    auto &ret = elem + constant;
+    return ret;
+}
+
+DiffFieldElem & operator-(FieldElem &elem, int x) {
+    std::string name = std::to_string(x);
+    auto &constant = elem.system.def(name);
+    constant.set(x);
+    auto &ret = elem - constant;
+    return ret;
+}
+
+ProdFieldElem & operator*(FieldElem &elem, int x) {
+    std::string name = std::to_string(x);
+    auto &constant = elem.system.def(name);
+    constant.set(x);
+    auto &ret = elem * constant;
+    return ret;
 }
 
 LeafFieldElem::LeafFieldElem(std::string _name, ZKSystem &_system) : FieldElem(_name, _system) {};
 
-int LeafFieldElem::eval() const {
+int LeafFieldElem::eval() {
+    if (!is_set) {
+        cout << "can't eval leaf element without a value" << endl;
+        throw 1;
+    }
     system.pb.val(pb_var) = val;
     return val;
 }
 
-SumFieldElem::SumFieldElem(const FieldElem &elem1, const FieldElem &elem2, ZKSystem &_system) :
-    child_a(elem1), child_b(elem2), FieldElem(elem1.name + "+" + elem2.name, _system) {};
+SumFieldElem::SumFieldElem(FieldElem &elem1, FieldElem &elem2, ZKSystem &_system) :
+    child_a(elem1), child_b(elem2), FieldElem("(" + elem1.name + "+" + elem2.name + ")", _system) {};
 
-int SumFieldElem::eval() const {
-    cout << "setting sum" << endl;
-    int val = child_a.eval() + child_b.eval();
-    system.pb.val(pb_var) = val;
-    cout << "set sum" << endl;
+int SumFieldElem::eval() {
+    if (!is_set) {
+        val = child_a.eval() + child_b.eval();
+        system.pb.val(pb_var) = val;
+        is_set = true;
+    }
     return val;
 }
 
-DiffFieldElem::DiffFieldElem(const FieldElem &elem1, const FieldElem &elem2, ZKSystem &_system) :
-    child_a(elem1), child_b(elem2), FieldElem(elem1.name + "-" + elem2.name, _system) {};
+DiffFieldElem::DiffFieldElem(FieldElem &elem1, FieldElem &elem2, ZKSystem &_system) :
+    child_a(elem1), child_b(elem2), FieldElem("(" + elem1.name + "-" + elem2.name + ")", _system) {};
 
-int DiffFieldElem::eval() const {
-    int val = child_a.eval() - child_b.eval();
-    system.pb.val(pb_var) = val;
-    cout << "set diff" << endl;
+int DiffFieldElem::eval() {
+    if (!is_set) {
+        val = child_a.eval() - child_b.eval();
+        system.pb.val(pb_var) = val;
+        is_set = true;
+    }
     return val;
 }
 
-ProdFieldElem::ProdFieldElem(const FieldElem &elem1, const FieldElem &elem2, ZKSystem &_system) :
-    child_a(elem1), child_b(elem2), FieldElem(elem1.name + "+" + elem2.name, _system) {};
+ProdFieldElem::ProdFieldElem(FieldElem &elem1, FieldElem &elem2, ZKSystem &_system) :
+    child_a(elem1), child_b(elem2), FieldElem("(" + elem1.name + "*" + elem2.name + ")", _system) {};
 
-int ProdFieldElem::eval() const {
-    cout << "setting prod" << endl;
-    int val = child_a.eval() * child_b.eval();
-    system.pb.val(pb_var) = val;
-    cout << "set prod" << endl;
+int ProdFieldElem::eval() {
+    if (!is_set) {
+        val = child_a.eval() * child_b.eval();
+        system.pb.val(pb_var) = val;
+        is_set = true;
+    }
     return val;
 }
 
 int main()
 {
-
-  // Initialize the curve parameters
   // Create zksystem
   ZKSystem system;
 
-  auto a1 = system.def("a1");
-  auto a0 = system.def("a0");
-  auto b1 = system.def("b1");
-  auto b0 = system.def("b0");
+  auto &a1 = system.def("a1");
+  auto &a0 = system.def("a0");
+  auto &b1 = system.def("b1");
+  auto &b0 = system.def("b0");
 
-  auto a1gtb1 = (1 - b1) * a1;
-  auto a0gtb0 = (1 - b0) * a0;
-  auto out = a1gtb1 + (1 - a1gtb1) * a0gtb0;
+  auto &a1gtb1 = (1 - b1) * a1;
+  auto &a0gtb0 = (1 - b0) * a0;
+  auto &out = a1gtb1 + (1 - a1gtb1) * a0gtb0;
 
   out.make_public();
   system.allocate();
@@ -234,11 +289,8 @@ int main()
   a0.set(0);
   b1.set(0);
   b0.set(1);
-  cout << "set everything" << endl;
 
   out.eval();
-
-  cout << "making keypair" << endl;
 
   auto keypair = system.make_keypair();
   auto proof = system.make_proof(keypair);
@@ -247,7 +299,6 @@ int main()
   cout << "Primary (public) input: " << system.pb.primary_input() << endl;
   cout << "Auxiliary (private) input: " << system.pb.auxiliary_input() << endl;
   cout << "Verification status: " << verified << endl;
-  cout << "Hello" << endl;
 
   return 0;
 }
