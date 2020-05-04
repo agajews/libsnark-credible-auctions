@@ -35,7 +35,7 @@ struct FieldElem {
     }
     void make_public() {
         pub = true;
-        cout << name << " public: " << pub << endl;
+        /* cout << name << " public: " << pub << endl; */
     }
 
     virtual int eval() {
@@ -59,7 +59,7 @@ struct LeafFieldElem : public FieldElem {
     LeafFieldElem(std::string _name, ZKSystem &_system);
 
     virtual void set(int x) {
-        cout << "setting " << name << " to " << x << endl;
+        /* cout << "setting " << name << " to " << x << endl; */
         is_set = true;
         val = x;
     }
@@ -126,7 +126,7 @@ struct ZKSystem {
         int n_pub = 0;
         for (FieldElem *elem : elems) {
             if (elem->pub) {
-                cout << "allocating public elem " << elem->name << endl;
+                /* cout << "allocating public elem " << elem->name << endl; */
                 n_pub += 1;
                 elem->pb_var.allocate(pb, elem->name);
             }
@@ -134,7 +134,7 @@ struct ZKSystem {
 
         for (FieldElem *elem : elems) {
             if (!elem->pub) {
-                cout << "allocating private elem " << elem->name << endl;
+                /* cout << "allocating private elem " << elem->name << endl; */
                 elem->pb_var.allocate(pb, elem->name);
             }
         }
@@ -371,44 +371,67 @@ int main()
   BitArray a(system, "a", 8);
   BitArray b(system, "b", 8);
   BitArray c(system, "c", 8);
+
+  auto &a_val = system.def("a_val");
+  auto &b_val = system.def("b_val");
+  auto &c_val = system.def("c_val");
+
   BitArray key(system, "key", 8);
 
-  auto &a_winner = (a > b) * (a > c);
-  auto &b_winner = (1 - a_winner) * (b > c);
+  auto &agtb = a > b;
+  auto &bgtc = b > c;
+  auto &agtc = a > c;
+
+  auto &a_winner = agtb * agtc;
+  auto &b_winner = (1 - a_winner) * bgtc;
   auto &c_winner = (1 - a_winner) * (1 - b_winner);
 
-  auto &out = 1 * a_winner + 2 * b_winner + 3 * c_winner;
+  auto &a_second = (1 - a_winner) * (agtb + (1 - agtb) * agtc);
+  auto &b_second = (1 - b_winner) * (bgtc + (1 - bgtc) * (1 - agtb));
+  auto &c_second = (1 - a_second) * (1 - b_second);
+
+  auto &winner = 1 * a_winner + 2 * b_winner + 3 * c_winner;
+  auto &price = a_val * a_second + b_val * b_second + c_val * c_second;
 
   auto ahash = a ^ key;
   auto bhash = b ^ key;
   auto chash = c ^ key;
 
-  out.make_public();
+  winner.make_public();
   ahash.make_public();
   bhash.make_public();
   chash.make_public();
+  price.make_public();
   key.make_public();
 
   system.allocate();
 
-  a.set(6);
-  b.set(5);
+  // set inputs
+  a.set(5);
+  a_val.set(5);
+
+  b.set(18);
+  b_val.set(18);
+
   c.set(10);
+  c_val.set(10);
+
   key.set(1337);
 
-  int output = out.eval();
+  // compute intermediate variables and outputs
+  int winner_output = winner.eval();
   auto ahash_output = ahash.eval();
   auto bhash_output = bhash.eval();
   auto chash_output = chash.eval();
+  int price_output = price.eval();
 
   auto keypair = system.make_keypair();
   auto proof = system.make_proof(keypair);
   bool verified = system.verify_proof(keypair, proof);
 
-  cout << "Primary (public) input: " << system.pb.primary_input() << endl;
-  cout << "Auxiliary (private) input: " << system.pb.auxiliary_input() << endl;
   cout << "Verification status: " << verified << endl;
-  cout << "Output: " << output << endl;
+  cout << "Winner: " << winner_output << endl;
+  cout << "Price: " << price_output << endl;
 
   cout << "ahash: ";
   for (auto val : ahash_output) {
