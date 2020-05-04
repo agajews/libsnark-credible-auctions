@@ -267,28 +267,54 @@ int ProdFieldElem::eval() {
     return val;
 }
 
+struct BitArray {
+    std::vector<FieldElem *> bits;
+    int size;
+    ZKSystem &system;
+
+    BitArray(ZKSystem &_system, std::string name, int _size) : system(_system), size(_size) {
+        for (int i=0; i<size; i++) {
+            bits.push_back(&system.def(name + std::to_string(i)));
+        }
+    }
+
+    FieldElem & operator[](int i) {
+        return *bits[i];
+    }
+
+    void set(std::vector<int> elems) {
+        for (int i=0; i<size; i++) {
+            bits[i]->set(elems[i]);
+        }
+    }
+
+    friend FieldElem & operator>(BitArray &arr1, BitArray &arr2);
+};
+
+FieldElem & operator>(BitArray &a, BitArray &b) {
+    FieldElem *out = &((1 - b[0]) * a[0]);  // most significant bit lowest
+    for (int i=1; i<a.size; i++) {
+        out = &(*out + (1 - *out) * (1 - b[i]) * a[i]);
+    }
+    FieldElem &out_ref = *out;
+    return out_ref;
+}
+
 int main()
 {
   // Create zksystem
   ZKSystem system;
 
-  auto &a1 = system.def("a1");
-  auto &a0 = system.def("a0");
-  auto &b1 = system.def("b1");
-  auto &b0 = system.def("b0");
+  BitArray a(system, "a", 2);
+  BitArray b(system, "b", 2);
 
-  auto &a1gtb1 = (1 - b1) * a1;
-  auto &a0gtb0 = (1 - b0) * a0;
-  auto &out = a1gtb1 + (1 - a1gtb1) * a0gtb0;
+  auto &out = a > b;
 
   out.make_public();
   system.allocate();
 
-  // Add witness values
-  a1.set(1);
-  a0.set(0);
-  b1.set(0);
-  b0.set(1);
+  a.set({1, 0});
+  b.set({0, 1});
 
   out.eval();
 
