@@ -370,25 +370,36 @@ int main()
 
   BitArray a(system, "a", 8);
   BitArray b(system, "b", 8);
+  BitArray c(system, "c", 8);
   BitArray key(system, "key", 8);
 
-  auto &out = a > b;
+  auto &a_winner = (a > b) * (a > c);
+  auto &b_winner = (1 - a_winner) * (b > c);
+  auto &c_winner = (1 - a_winner) * (1 - b_winner);
+
+  auto &out = 1 * a_winner + 2 * b_winner + 3 * c_winner;
+
   auto ahash = a ^ key;
   auto bhash = b ^ key;
+  auto chash = c ^ key;
 
   out.make_public();
   ahash.make_public();
   bhash.make_public();
+  chash.make_public();
   key.make_public();
+
   system.allocate();
 
   a.set(6);
   b.set(5);
+  c.set(10);
   key.set(1337);
 
   int output = out.eval();
   auto ahash_output = ahash.eval();
   auto bhash_output = bhash.eval();
+  auto chash_output = chash.eval();
 
   auto keypair = system.make_keypair();
   auto proof = system.make_proof(keypair);
@@ -407,6 +418,12 @@ int main()
 
   cout << "bhash: ";
   for (auto val : bhash_output) {
+      cout << val << ' ';
+  }
+  cout << endl;
+
+  cout << "chash: ";
+  for (auto val : chash_output) {
       cout << val << ' ';
   }
   cout << endl;
