@@ -6,6 +6,7 @@
 #include "libsnark/common/default_types/r1cs_ppzksnark_pp.hpp"
 #include "libsnark/gadgetlib1/pb_variable.hpp"
 
+#include "gadget.hpp"
 #include "util.hpp"
 
 using namespace libsnark;
@@ -13,78 +14,41 @@ using namespace std;
 
 int main()
 {
-  typedef libff::Fr<default_r1cs_ppzksnark_pp> FieldT;
-
   // Initialize the curve parameters
 
   default_r1cs_ppzksnark_pp::init_public_params();
+
+  typedef libff::Fr<default_r1cs_ppzksnark_pp> FieldT;
   
   // Create protoboard
 
   protoboard<FieldT> pb;
-
-  // Define variables
-
-  pb_variable<FieldT> a1, a0, b1, b0;
-  pb_variable<FieldT> a1gtb1, a0gtb0;
-  pb_variable<FieldT> not_a1gtb1_and_a0gtb0;
-  pb_variable<FieldT> agtb;
   pb_variable<FieldT> out;
+  pb_variable<FieldT> x;
 
-  // Allocate variables to protoboard
-  // The strings (like "x") are only for debugging purposes
-  
+  // Allocate variables
+
   out.allocate(pb, "out");
-
-  a1.allocate(pb, "a1");
-  a0.allocate(pb, "a2");
-  b1.allocate(pb, "b1");
-  b0.allocate(pb, "b0");
-  a1gtb1.allocate(pb, "a1gtb1");
-  a0gtb0.allocate(pb, "a0gtb0");
-  not_a1gtb1_and_a0gtb0.allocate(pb, "not_a1gtb1_and_a0gtb0");
-  agtb.allocate(pb, "agtb");
+  x.allocate(pb, "x");
 
   // This sets up the protoboard variables
   // so that the first one (out) represents the public
   // input and the rest is private input
+
   pb.set_input_sizes(1);
 
-  // Add R1CS constraints to protoboard
+  // Initialize gadget
 
-  // a1gtb1 = (1 - b1)a1
-  pb.add_r1cs_constraint(r1cs_constraint<FieldT>(1 - b1, a1, a1gtb1));
-
-  // a0gtb0 = (1 - b0)a0
-  pb.add_r1cs_constraint(r1cs_constraint<FieldT>(1 - b0, a0, a0gtb0));
-
-  // not_a1gtb1_and_a0gtb0 = (1 - a1gtb1)a0gtb0
-  pb.add_r1cs_constraint(r1cs_constraint<FieldT>(1 - a1gtb1, a0gtb0, not_a1gtb1_and_a0gtb0));
-
-  // agtb = (a1gtb1 + not_a1gtb1_and_a0gtb0)1
-  pb.add_r1cs_constraint(r1cs_constraint<FieldT>(a1gtb1 + not_a1gtb1_and_a0gtb0, 1, agtb));
-
-  // out = (agtb)1
-  pb.add_r1cs_constraint(r1cs_constraint<FieldT>(agtb, 1, out));
+  test_gadget<FieldT> g(pb, out, x);
+  g.generate_r1cs_constraints();
   
   // Add witness values
 
-  // inputs:
-  pb.val(a1) = 1;
-  pb.val(a0) = 1;
+  pb.val(out) = 35;
+  pb.val(x) = 3;
 
-  pb.val(b1) = 0;
-  pb.val(b0) = 1;
-
-  // intermediate variables:
-  pb.val(a1gtb1) = 1;
-  pb.val(a0gtb0) = 0;
-  pb.val(not_a1gtb1_and_a0gtb0) = 0;
-  pb.val(agtb) = 1;
-
-  // output:
-  pb.val(out) = 1;
-
+  g.generate_r1cs_witness();
+  
   const r1cs_constraint_system<FieldT> constraint_system = pb.get_constraint_system();
 
   const r1cs_ppzksnark_keypair<default_r1cs_ppzksnark_pp> keypair = r1cs_ppzksnark_generator<default_r1cs_ppzksnark_pp>(constraint_system);

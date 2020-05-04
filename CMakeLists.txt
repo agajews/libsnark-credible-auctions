@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 2.8)
 
 project(libsnark-tutorial)
 
+set (CMAKE_AUTOMOC ON)
+
 set(
   CURVE
   "ALT_BN128"
