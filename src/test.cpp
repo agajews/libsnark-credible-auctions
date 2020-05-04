@@ -288,16 +288,53 @@ struct BitArray {
         }
     }
 
+    void set(int x) {
+        for (int i=0; i<size; i++) {
+            bits[i]->set((x >> (size - i - 1)) % 2);
+        }
+    }
+
     friend FieldElem & operator>(BitArray &arr1, BitArray &arr2);
+    friend FieldElem & operator<(BitArray &arr1, BitArray &arr2);
+    friend FieldElem & operator>=(BitArray &arr1, BitArray &arr2);
+    friend FieldElem & operator<=(BitArray &arr1, BitArray &arr2);
+    friend FieldElem & operator==(BitArray &arr1, BitArray &arr2);
 };
 
 FieldElem & operator>(BitArray &a, BitArray &b) {
     FieldElem *out = &((1 - b[0]) * a[0]);  // most significant bit lowest
+    FieldElem *equal = &(a[0] * b[0] + (1 - a[0]) * (1 - b[0]));
     for (int i=1; i<a.size; i++) {
-        out = &(*out + (1 - *out) * (1 - b[i]) * a[i]);
+        out = &(*out + (1 - *out) * (*equal) * ((1 - b[i]) * a[i]));
+        equal = &(*equal * (a[i] * b[i] + (1 - a[i]) * (1 - b[i])));
     }
     FieldElem &out_ref = *out;
     return out_ref;
+}
+
+FieldElem & operator<(BitArray &a, BitArray &b) {
+    FieldElem &out_ref = b > a;
+    return out_ref;
+}
+
+FieldElem & operator==(BitArray &a, BitArray &b) {
+    FieldElem *out = &(a[0] * b[0] + (1 - a[0]) * (1 - b[0]));
+    for (int i=1; i<a.size; i++) {
+        out = &(*out * (a[i] * b[i] + (1 - a[i]) * (1 - b[i])));
+    }
+    FieldElem &out_ref = *out;
+    return out_ref;
+}
+
+FieldElem & operator>=(BitArray &a, BitArray &b) {
+    FieldElem &agtb = a > b;
+    FieldElem &out = agtb + (1 - agtb) * (a == b);
+    return out;
+}
+
+FieldElem & operator<=(BitArray &a, BitArray &b) {
+    FieldElem &out = b >= a;
+    return out;
 }
 
 int main()
@@ -305,18 +342,18 @@ int main()
   // Create zksystem
   ZKSystem system;
 
-  BitArray a(system, "a", 2);
-  BitArray b(system, "b", 2);
+  BitArray a(system, "a", 8);
+  BitArray b(system, "b", 8);
 
-  auto &out = a > b;
+  auto &out = a == b;
 
   out.make_public();
   system.allocate();
 
-  a.set({1, 0});
-  b.set({0, 1});
+  a.set(6);
+  b.set(5);
 
-  out.eval();
+  int output =  out.eval();
 
   auto keypair = system.make_keypair();
   auto proof = system.make_proof(keypair);
@@ -325,6 +362,7 @@ int main()
   cout << "Primary (public) input: " << system.pb.primary_input() << endl;
   cout << "Auxiliary (private) input: " << system.pb.auxiliary_input() << endl;
   cout << "Verification status: " << verified << endl;
+  cout << "Output: " << output << endl;
 
   return 0;
 }
